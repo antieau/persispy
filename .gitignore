@@ -1,4 +1,32 @@
+# tex
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.nav
+*.out
+*.snm
+*.toc
+*.synctex.gz
+*.pdf
+
+# misc
+.csv
+.png
+
+# prefixes to ignore
+private*
+personal*
+
+# nonessential project files
+.vim
+.ropeproject
+.travis.yml
+
+# Various swap files to ignore
 *.py[cod]
+*.sw[klmnop]
+*.ipynb
 
 # C extensions
 *.so
@@ -40,4 +68,4 @@ output/*.html
 output/*/index.html
 
 # Sphinx
-docs/_build
+docs/build

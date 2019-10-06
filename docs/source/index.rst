@@ -8,15 +8,17 @@ Welcome to persispy's documentation!
 
 Contents:
 
+.. The "." prefix merely reference the ../../persispy directory. Please make any necessary changes there.
+
 .. toctree::
    :maxdepth: 2
 
-   readme
+   .readme
    installation
    usage
+   .authors
    contributing
-   authors
-   history
+   .history
 
 Indices and tables
 ==================

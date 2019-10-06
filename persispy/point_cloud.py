@@ -1,335 +1,374 @@
-import numpy as np
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import mpl_toolkits.mplot3d.axes3d as plt3
-import weighted_simplicial_complex as wsc
-from utils import tuples
+'''
+File: point_cloud.py
+
+The PointCloud data structure and related functions.
+
+AUTHORS:
+
+    - Benjamin Antieau (2015-04)
+    - Mason Boeman (2015-04)
+    - Daniel Etrata (2015-11)
+'''
+
 import math
-import os as os
 
-class PointCloud:
-    def __init__(self,points,space='affine'):
-        '''
-        Points should be a list of hashable objects.
+import numpy as np
+# from numpy import array
+# import matplotlib as mpl
+# import matplotlib.pyplot as plt
+# import mpl_toolkits.mplot3d.axes3d as plt3
+# import mpl_toolkits.mplot3d as a3
 
-        Variables:
-            _points: a array of hashable points.
-            _space: either 'affine' or 'projective'.
-        '''
+from persispy.weighted_simplicial_complex import wGraph
+from persispy.hashing import HashPoint
+from random import randint
+# from persispy.hashing import HashEdge
+
+
+class PointCloud(object):
+
+    '''
+    The :class:`PointCloud` class returns a point cloud with the
+    properties of being hashable, which is necessary for indexing
+    a dictionary.
+
+    :param list points: A list of points
+    :param str space: [affine|projective] The space the points live in.
+    :param bool gui: Used by :mod:`persispy.plot` to either display or return the plot
+
+    '''
+
+    def __init__(self, points, space='affine', gui=False):
+        if type(points) is not np.ndarray:
+            points = np.array(points)
         try:
-            self._points=list(points)
+            self._points = list(points)
         except TypeError:
-            raise TypeError('Input points should be an iterable of hashable points.')
-
+            raise TypeError('Input points should be a list of points.')
         try:
             hash(self._points[0])
         except TypeError:
-            raise TypeError('Input points should be an iterable of hashable points.')
-
+#             print("Detected points are not hashable." +
+#                   "Attempting to convert to HashPoints.")
+            self._points = [HashPoint(points[n],
+                                      index=n) for n in range(len(points))]
         if space != 'affine' and space != 'projective':
-            raise TypeError('The argument "space" should be set to either "affine" or "projective".')
+            raise TypeError('The argument "space" should be set to' +
+                            'either "affine" or "projective".')
 
-        self._points=points
-        self._space=space
+        self._space = space
+        self._fig = None
+        self.gui = gui
 
     def __repr__(self):
-        return 'Point cloud with '+repr(self.num_points())+' points in real '+self._space+' space of dimension '+repr(self.dimension())
+        try:
+            repr(self.dimension())
+        except AttributeError:
+            raise AttributeError(
+                'The numpy array must be a single set of points.')
+        return 'Point cloud with ' + repr(self.num_points()) + \
+            ' points in real ' + self._space + \
+            ' space of dimension ' + repr(self.dimension())
 
-    def num_points(self):
+    def get_points(self):
+        """
+        We return the PointCloud's points.
+        """
+        return self._points
+
+    def get_space(self):
+        """
+        We return the PointCloud's space.
+        """
+        return self._space
+
+    def __len__(self):
         return len(self._points)
 
+    def size(self):
+        """
+        Returns the number of points in the point cloud.
+        """
+        return len(self._points)
+
+    def __getitem__(self, key):
+        return tuple(self._points[key].coordinate())
+
+    def num_points(self):
+        """
+        Legacy function.
+        Returns the number of points in the point cloud.
+        """
+        return self.size()
+
     def dimension(self):
-        if self._space=='affine':
-            return len(self._points[0]._coords)
-        elif self._space=='projective':
-            return len(self._points[0]._coords)-1
+        """
+        Returns the dimension of the point cloud.
+        """
+        if self._space == 'affine':
+            return len(self._points[0].coordinate())
+        elif self._space == 'projective':
+            return len(self._points[0].coordinate()) - 1
 
-    def plot2d(self,axes=(0,1)):
-        if self._space=='affine':
-            fig,(ax)=plt.subplots(1,1)
-            fig.set_size_inches(10.0,10.0)
-            xcoords=[p._coords[axes[0]] for p in self._points]
-            ycoords=[p._coords[axes[1]] for p in self._points]
-            ax.plot(xcoords,ycoords,',')
-            ax.grid(True)
-            ax.axis([1.1*min(xcoords),1.1*max(xcoords),1.1*min(ycoords),1.1*max(ycoords)])
-            ax.set_aspect('equal')
-            ax.set_xlabel('x')
-            ax.set_ylabel('y')
-            plt.setp([a.get_xticklabels() for a in fig.axes[:-1]], visible=False)
-            plt.show()
-            plt.close()
-            return True
-        else:
-            return None
-        
-    def plot3d(self,axes=(0,1,2)):
-        if self._space=='affine':
-            fig=plt.figure()
-            fig.set_size_inches(10.0,10.0)
-            ax = plt3.Axes3D(fig)
-            xcoords=[p._coords[axes[0]] for p in self._points]
-            ycoords=[p._coords[axes[1]] for p in self._points]
-            zcoords=[p._coords[axes[2]] for p in self._points]
-            ax.scatter(xcoords,ycoords,zcoords)
-            ax.set_xlabel('x')
-            ax.set_ylabel('y')
-            ax.set_zlabel('z')
-            fig.add_axes(ax)
-            plt.show()
-            plt.close()
-            return True
-        else:
-            return None
+    def plot2d(self, *args, **kwargs):
+        """
+        redirecting plotting methods
+        """
+        from persispy.plot import plot2d
+        print ("warning: PointCloud.plot2d() depreciated, use instead")
+        print (">>> persispy.plot.plot2d(PointCloud)")
+        plot2d(self, *args, **kwargs)
 
-    def plot2d_neighborhood_graph(self,epsilon,axes=(0,1),shading_axis=2,method='subdivision'):
-        if self._space=='affine':
-            g=self.neighborhood_graph(epsilon,method)
-            edges=[]
-            c=[]
+    def plot3d(self, *args, **kwargs):
+        """
+        redirecting plotting methods
+        """
+        from persispy.plot import plot3d
+        print ("warning: PointCloud.plot3d() depreciated, use instead")
+        print (">>> persispy.plot.plot3d(PointCloud)")
+        plot3d(self, *args, **kwargs)
 
-            # For the two plotting directions
-            minx=min(p._coords[axes[0]] for p in self._points)
-            maxx=max(p._coords[axes[0]] for p in self._points)
-            miny=min(p._coords[axes[1]] for p in self._points)
-            maxy=max(p._coords[axes[1]] for p in self._points)
+    def plot2d_neighborhood_graph(self, epsilon, *args, **kwargs):
+        """
+        redirecting plotting methods
+        """
+        from persispy.plot import plot2d
+        print ("warning: PointCloud.plot2d_neighborhood_graph()" +
+               "depreciated, use instead")
+        print (">>> persispy.plot.plot2d(wGraph)")
+        wgraph = self.neighborhood_graph(epsilon)
+        plot2d(wgraph, *args, **kwargs)
 
-            # For the shading direction
-            minz=min(p._coords[shading_axis] for p in self._points)
-            maxz=max(p._coords[shading_axis] for p in self._points)
+    def plot3d_neighborhood_graph(self, epsilon, *args, **kwargs):
+        """
+        redirecting plotting methods
+        """
+        from persispy.plot import plot3d
+        wgraph = self.neighborhood_graph(epsilon)
+        print ("warning: PointCloud.plot3d_neighborhood_graph()" +
+               "depreciated, use instead")
+        print (">>> persispy.plot.plot3d(wGraph)")
+        plot3d(wgraph, *args, **kwargs)
 
-            for p in self._points:
-                if p._coords[shading_axis]<=minz+(maxz-minz)/2:
-                    pc=p._coords
-                    for e in g._adj[p]:
-                        qc=e[0]._coords
-                        edges.append([[qc[axes[0]],qc[axes[1]]],[pc[axes[0]],pc[axes[1]]]])
-                        c.append(((p._coords[shading_axis]-minz)/(maxz-minz),.5,.5,.5))
-            for p in self._points:
-                if p._coords[shading_axis]>=minz+(maxz-minz)/2:
-                    pc=p._coords
-                    for e in g._adj[p]:
-                        qc=e[0]._coords
-                        edges.append([[qc[axes[0]],qc[axes[1]]],[pc[axes[0]],pc[axes[1]]]])
-                        c.append(((p._coords[shading_axis]-minz)/(maxz-minz),.5,.5,.5))
-            lines=mpl.collections.LineCollection(edges,color=c)
-            fig,(ax)=plt.subplots()
-            fig.set_size_inches(10.0,10.0)
-            ax.grid(True)
-            ax.axis([minx-.1*abs(maxx-minx),maxx+.1*abs(maxx-minx),miny-.1*abs(maxy-miny),maxy+.1*abs(maxy-miny)])
-            ax.set_aspect('equal')
-            ax.add_collection(lines)
-#             xcoords=[p._coords[axes[0]] for p in self._points]
-#             ycoords=[p._coords[axes[1]] for p in self._points]
-#             ax.plot(xcoords,ycoords,',')
-            plt.show()
-            plt.close()
-            return True
-        else:
-            return None
+    def neighborhood_graph(self,
+                           epsilon,
+                           method="subdivision"):
+        """
+        calls its recursive function
 
-    def film_neighborhood_graph(self,step,num_steps,fps=24,method='subdivision',file_name='movie.mp4'):
-        '''
-        WARNING: do not run this in a Dropbox folder.
+        :param float epsilon: maximum distance between points
+        :param str method: [exact|subdivision|subdivision 3|subdivision 7 approximate]
+        :return: a :class:`wGraph` of the form ``{point: {adj_points:distance}}``
+        .. automethod:: _neighborhood_graph
+        """
+        return self._neighborhood_graph(epsilon,
+                                        method,
+                                        self._points,
+                                        {v: set() for v in self._points})
 
-        WARNING: this function rewrites movie.mp4 in the working directory by
-        default. To change this, add file_name='your_file_name.mp4' to the
-        function call.
-
-        WARNING: this function is currently very slow for large data sets,
-        thanks it seems to the slowness in plotting so many points.
-        '''
-        if self._space=='affine':
-            epsilon=0
-            h=self.neighborhood_graph(step*num_steps,method)
-            os.system("rm _tmp*.png")
-            fig,(ax)=plt.subplots(1,1)
-            fig.set_size_inches(10.0,10.0)
-            for i in range(num_steps):
-                epsilon=epsilon+step
-                g=h.neighborhood_graph(epsilon)
-                for p in self._points:
-                    if p._coords[2]<=0:
-                        for e in g._adj[p]:
-                            ax.plot([e[0]._coords[0],p._coords[0]],
-                                     [e[0]._coords[1],p._coords[1]],color=(.5*p._coords[2]+.5,.5,.5,.5))
-                for p in self._points:
-                    if p._coords[2]>0:
-                        for e in g._adj[p]:
-                            ax.plot([e[0]._coords[0],p._coords[0]],
-                                     [e[0]._coords[1],p._coords[1]],color=(.5*p._coords[2]+.5,.5,.5,.5))
-
-                ax.grid(True)
-                ax.set_aspect('equal')
-                plt.setp([a.get_xticklabels() for a in fig.axes[:-1]], visible=False)
-
-                fname = '_tmp%05d.png'%i
-                plt.savefig(fname)
-                plt.cla()
-            plt.close(fig)
-            os.system("rm "+file_name)
-            os.system("ffmpeg -r "+str(fps)+" -i _tmp%05d.png "+file_name)
-            os.system("rm _tmp*.png")
-            return None
-        else:
-            return None
-
-#  neighborhood_graph(self,epsilon,method='subdivision'):
-#         if method=='subdivision':
-#             if self._space=='projective':
-#                 return self.neighborhood_graph(epsilon,method='exact')
-#             elif self._space=='affine':
-#                 return None
-#         elif method=='exact':
-#             '''
-#             Issue: this doesn't work because lists and numpy arrays are not hashable.
-#             '''
-#             dict={v:[] for v in self._points}
-#             for t in tuples(2,self._points):
-#                 if self._space=='affine':
-#                     dist=np.sqrt(sum((t[0]._coords-t[1]._coords)*(t[0]._coords-t[1]._coords)))
-#                     if dist<epsilon:
-#                         dict[t[0]].append([t[1],dist])
-#                         dict[t[1]].append([t[0],dist])
-#                 elif self._space=='projective':
-#                     return None
-#             return wsc.wGraph(dict)
-#         elif method=='approximate':
-#             return None
-#         elif method=='randomized':
-#             return None
-#         elif method=='landmarking':
-#             return None
-#         else:
-#             raise TypeError('Method should be one of subdivision, exact, approximate, randomized, or landmarking.')
-
-    def neighborhood_graph(self,epsilon,method):
-        return self._neighborhood_graph(epsilon,method,self._points,{v:[] for v in self._points})
-    
-    def _neighborhood_graph(self,epsilon,method,pointarray,dictionary):
+    def _neighborhood_graph(self,  # pylint: disable = R0911, R0912
+                            # too many branches and too many return values
+                            epsilon,
+                            method,
+                            pointarray,
+                            dictionary):
         '''
         The 'method' string is separated by spaces. Acceptable values:
 
-        "exact"									does "exact"
-        "subdivision"							does "subdivision" to infinite depth
-        "subdivision 3"							does "subdivision" to depth 3, then "exact"
-        "subdivision 7 approximate"				does "subdivision" to depth 7, then "approximate"
+        "exact"
+                does "exact"
+        "subdivision"
+                does "subdivision" to infinite depth
+        "subdivision 3"
+                does "subdivision" to depth 3, then "exact"
+        "subdivision 7 approximate"
+                does "subdivision" to depth 7, then "approximate"
+
+        returns {point: {adj_points:distance}}
 
         '''
-        methodarray=method.split(' ')
-        if methodarray[0]=='subdivision':
-            if self._space=='projective':
-                return self.neighborhood_graph(epsilon,method='exact')
-            elif self._space=='affine':
-                if len(methodarray)>1:
-                    d=int(methodarray[1])
-                    m=''
-                    for i in range(len(methodarray)-2):
-                        m=m+methodarray[i+2]
-                        m=m+' '
-                        
-                    if m=='':
-                        self._subdivide_neighbors(epsilon, dictionary, pointarray, depth=d)
-                        return wsc.wGraph(dictionary)
+        methodarray = method.split(' ')
+
+        if methodarray[0] == 'subdivision':
+
+            if self._space == 'projective':
+                return self.neighborhood_graph(epsilon, method='exact')
+            elif self._space == 'affine':
+                if len(methodarray) > 1:
+                    d = int(methodarray[1])
+                    m = ''
+                    for i in range(len(methodarray) - 2):
+                        m = m + methodarray[i + 2]
+                        m = m + ' '
+
+                    if m == '':
+                        self._subdivide_neighbors(epsilon,
+                                                  dictionary,
+                                                  pointarray,
+                                                  depth=d)
+                        return wGraph(dictionary, epsilon)
                     else:
-                        self._subdivide_neighbors(epsilon, dictionary, pointarray, m, depth=d)
-                        return wsc.wGraph(dictionary)
+                        self._subdivide_neighbors(epsilon,
+                                                  dictionary,
+                                                  pointarray,
+                                                  coordinate=m,
+                                                  depth=d)
+                        return wGraph(dictionary, epsilon)
                 else:
                     self._subdivide_neighbors(epsilon, dictionary, pointarray)
-                    return wsc.wGraph(dictionary)
-        elif methodarray[0]=='exact':
-            '''
-            Issue: this doesn't work because lists and numpy arrays are not hashable.
-            '''
-            for i in range(len(self._points)):
-                for j in range(i+1,len(self._points)):
-                    if self._space=='affine':
-                        dist=np.sqrt(sum((self._points[i]._coords-self._points[j]._coords)*(self._points[i]._coords-self._points[j]._coords)))
-                        if dist<epsilon:
-                            dictionary[self._points[i]].append([self._points[j],dist])
-                            dictionary[self._points[j]].append([self._points[i],dist])
-                    elif self._space=='projective':
-                        return None
-            return wsc.wGraph(dictionary)
-        elif methodarray[0]=='approximate':
-            return None
-        elif methodarray[0]=='randomized':
-            return None
-        elif methodarray[0]=='landmarking':
-            return None
-        else:
-            raise TypeError('Method should be one of subdivision, exact, approximate, randomized, or landmarking.')
+                    return wGraph(dictionary, epsilon)
 
-    def _selectpoint(self,pointarray, k, n):
-        #gives the kth smallest point of "self._points", according to the nth coordinate
-        #we use this to give the median, but a general solution for k is needed for the recursive algorithm
-        #this algorithm is O(n) for best and worst cases
-        
+        elif methodarray[0] == 'exact':
+            for i in range(len(self._points)):
+                for j in range(i + 1, len(self._points)):
+                    if self._space == 'affine':
+                        dist = np.sqrt(
+                            sum((self._points[i].coordinate() -
+                                 self._points[j].coordinate())**2))
+                        if dist < epsilon:
+                            dictionary[self._points[i]].add(
+                                (self._points[j], dist))
+                            dictionary[self._points[j]].add(
+                                (self._points[i], dist))
+                    elif self._space == 'projective':
+                        return None
+            return wGraph(dictionary, epsilon)
+
+        elif methodarray[0] == 'approximate':
+            return None
+        elif methodarray[0] == 'randomized':
+            return None
+        elif methodarray[0] == 'landmarking':
+            return None
+
+        else:
+            raise TypeError(
+                'Method should be one of subdivision, exact, approximate, ' +
+                'randomized, or landmarking.')
+
+
+
+    def _selectpoint(self, pointarray, k, n):
+        """
+        We return the kth smallest point of :data:pointarray, according to the
+        nth coordinate. We use this to give the median, but a general
+        solution for k is needed for the recursive algorithm. This
+        algorithm is O(n) for best and worst cases.
+        """
+
         a = pointarray[:]
         c = []
-        while(len(a)>5):
-            for x in range(int(math.floor(len(a)/5))):
-                b=pointarray[5*x:5*x+5]
-                b.sort(key = lambda x: x._coords[n])
-                c.append(b[int(math.floor(len(b)/2))])
+
+        if len(pointarray) == 1:
+            return a[0]
+
+        while(len(a) > 5):
+            for x in range(int(math.floor(len(a) / 5))):
+                b = pointarray[5 * x: 5 * x + 5]
+                b.sort(key=lambda x: x.coordinate()[n])
+                c.append(b[int(math.floor(len(b) / 2))])
             a = c
             c = []
-        pivot = a[int(math.floor(len(a)/2))]
-        
-        lesser = [point for point in pointarray if point._coords[n] < pivot._coords[n]]
+        pivot = a[int(math.floor(len(a) / 2))]
+
+        lesser = [
+            point for point in pointarray
+            if point.coordinate()[n] < pivot.coordinate()[n]]
         if len(lesser) > k:
-            return self._selectpoint(lesser, k, n)
+            return self._selectpoint(lesser, k, n)  # recursive
         k -= len(lesser)
 
-        equal = [point for point in pointarray if point._coords[n] == pivot._coords[n]]
+        equal = [
+            point for point in pointarray
+            if point.coordinate()[n] == pivot.coordinate()[n]]
         if len(equal) > k:
-            return pivot
+            return pivot  # basecase
         k -= len(equal)
 
-        greater = [point for point in pointarray if point._coords[n] > pivot._coords[n]]
-        return self._selectpoint(greater, k, n)
+        greater = [
+            point for point in pointarray
+            if point.coordinate()[n] > pivot.coordinate()[n]]
+        return self._selectpoint(greater, k, n)  # recursive
 
-    def _subdivide_neighbors(self, e, dict, pointarray, coordinate=0, method='exact', depth=-1):
-        #divides the space into two regions about the median point relative to "coordinate"
-        #glues the two regions, then recursively calls itself on the two regions.
-        if len(pointarray)>1:
-            median = self._selectpoint(pointarray, len(pointarray)/2, coordinate)
+    def _subdivide_neighbors(self,  # pylint: disable = R0914
+                             epsilon,  # too many local variables
+                             dictionary,
+                             pointarray,
+                             coordinate=0,
+                             method='exact',
+                             depth=-1):
+        """
+        method and depth are accumulators for the recursive calls
+        divides the space into two regions about the median point
+        relative to "coordinate" glues the two regions, then recursively
+        calls itself on the two regions.
+        """
+        if len(pointarray) > 1:
+            median = self._selectpoint(
+                pointarray, math.floor(len(pointarray) / 2), coordinate)
             smaller = []
             bigger = []
             gluesmaller = []
             gluebigger = []
-            #split into two regions
-            for i in range(len(pointarray)):
-                if pointarray[i]._coords[coordinate] <  median._coords[coordinate]:
-                    smaller.append(pointarray[i])
-                    if pointarray[i]._coords[coordinate] > median._coords[coordinate]-e:
-                        gluesmaller.append(pointarray[i])
-                
-                if pointarray[i]._coords[coordinate] >= median._coords[coordinate]:
-                    bigger.append(pointarray[i])
-                    if pointarray[i]._coords[coordinate] < median._coords[coordinate]+e:
-                        gluebigger.append(pointarray[i])
-            #glue together the two regions
-            
-            for i in range(len(gluesmaller)):
-                for j in range(len(gluebigger)):
-                    dist = np.sqrt(sum(((gluesmaller[i])._coords-gluebigger[j]._coords)*(gluesmaller[i]._coords-gluebigger[j]._coords)))
-                    if dist<e:
-                        dict[gluesmaller[i]].append([gluebigger[j],dist])
-                    #    dict[gluesmaller[i]].sort(key = lambda x: len(dict[x]))
-                        dict[gluebigger[j]].append([gluesmaller[i],dist])
-                    #    dict[gluebigger[j]].sort(key = lambda x: len(dict[x]))
-                        
-            #recursively compute for the two regions, now using a different reference coordinate, to reduce gluing area
-            if depth == -1: #depth -1 means fully recursive. all edges are formed by "gluing"
-                coordinate = (coordinate+1)%self.dimension()
-                self._subdivide_neighbors(e, dict, smaller, coordinate, method, depth=-1)
-                self._subdivide_neighbors(e, dict, bigger, coordinate, method, depth=-1)
-            if depth == 0:
-                self._neighborhood_graph(e,method,smaller,dict)
-                self._neighborhood_graph(e,method,bigger,dict)
-            if depth > 0:
-                coordinate = (coordinate+1)%self.dimension()
-                self._subdivide_neighbors(e, depth-1, coordinate, smaller)
-                self._subdivide_neighbors(e, depth-1, coordinate, bigger)
-        
+
+            for i, _ in enumerate(pointarray):  # split into two regions
+
+
+                if randint(0,1):
+                    if pointarray[i].coordinate()[coordinate] <= \
+                            median.coordinate()[coordinate]:
+                        smaller.append(pointarray[i])
+                        if (pointarray[i].coordinate()[coordinate] >
+                                median.coordinate()[coordinate] - epsilon):
+                            gluesmaller.append(pointarray[i])
+
+                    if pointarray[i].coordinate()[coordinate] > \
+                            median.coordinate()[coordinate]:
+                        bigger.append(pointarray[i])
+                        if (pointarray[i].coordinate()[coordinate] < \
+                                median.coordinate()[coordinate] + epsilon):
+                            gluebigger.append(pointarray[i])
+
+                else:
+                    if pointarray[i].coordinate()[coordinate] < \
+                            median.coordinate()[coordinate]:
+                        smaller.append(pointarray[i])
+                        if (pointarray[i].coordinate()[coordinate] >
+                                median.coordinate()[coordinate] - epsilon):
+                            gluesmaller.append(pointarray[i])
+
+                    if pointarray[i].coordinate()[coordinate] >= \
+                            median.coordinate()[coordinate]:
+                        bigger.append(pointarray[i])
+                        if (pointarray[i].coordinate()[coordinate] < \
+                                median.coordinate()[coordinate] + epsilon):
+                            gluebigger.append(pointarray[i])
+
+            for i, _ in enumerate(gluesmaller):  # glue together two regions
+                for j, _ in enumerate(gluebigger):
+                    dist = np.sqrt(
+                        sum(((gluesmaller[i]).coordinate() -
+                             gluebigger[j].coordinate()) *
+                            (gluesmaller[i].coordinate() -
+                             gluebigger[j].coordinate())))
+                    if dist < epsilon:
+                        dictionary[gluesmaller[i]].add((gluebigger[j], dist))
+                        dictionary[gluebigger[j]].add((gluesmaller[i], dist))
+
+            coordinate = (coordinate + 1) % self.dimension()
+            if depth == -1:  # full recursive. all edges are formed by "gluing"
+                self._subdivide_neighbors(
+                    epsilon, dictionary, smaller, coordinate, method, depth=-1)
+                self._subdivide_neighbors(
+                    epsilon, dictionary, bigger, coordinate, method, depth=-1)
+            elif depth == 0:
+                self._neighborhood_graph(epsilon, method, smaller, dictionary)
+                self._neighborhood_graph(epsilon, method, bigger, dictionary)
+            elif depth > 0:
+                self._subdivide_neighbors(
+                    epsilon, dictionary, smaller, coordinate, method, depth-1)
+                self._subdivide_neighbors(
+                    epsilon, dictionary, bigger, coordinate, method, depth-1)
+
+
+
